@@ -57,13 +57,56 @@ class LeetCodeDashboard:
         # Configure root window
         self.root.configure(bg=self.colors['bg'])
         self.configure_styles()
+        
+        # Create canvas and scrollbar
+        self.canvas = tk.Canvas(self.root, bg=self.colors['bg'], highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        # Pack canvas and scrollbar
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Create inner frame for content
+        self.inner_frame = ttk.Frame(self.canvas)
+        self.canvas_frame = self.canvas.create_window((0, 0), window=self.inner_frame, anchor=tk.NW)
+        
+        # Bind configuration events
+        self.inner_frame.bind("<Configure>", self._on_frame_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+        
+        # Bind mousewheel event
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        
+        # Create widgets
         self.create_widgets()
         self.root.bind('<Control-s>', lambda event: self.export_data())
+        
         # Set charts
         self.total_chart = None
         self.difficulty_chart = None
         self.comparison_chart = None
         self.progress_chart = None
+
+    def _on_frame_configure(self, event=None):
+        """Update scroll region when inner frame size changes"""
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event):
+        """Update inner frame width to match canvas"""
+        canvas_width = event.width
+        self.canvas.itemconfig(self.canvas_frame, width=canvas_width)
+
+    def _on_mousewheel(self, event):
+        """Handle mousewheel scrolling"""
+        # Check if event occurs inside scrollable widgets
+        widget = event.widget
+        while widget:
+            if isinstance(widget, (ttk.Treeview, tk.Text)):
+                # Let scrollable widget handle the event
+                return
+            widget = widget.master
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def configure_styles(self):
         style = ttk.Style()
@@ -143,7 +186,7 @@ class LeetCodeDashboard:
 
     def create_widgets(self):
         # Create main notebook for tabs
-        self.main_notebook = ttk.Notebook(self.root)
+        self.main_notebook = ttk.Notebook(self.inner_frame)
         self.main_notebook.pack(fill=tk.BOTH, expand=True)
         
         # Create main tabs
@@ -390,7 +433,10 @@ class LeetCodeDashboard:
         
         self.status = ttk.Label(status_frame, text="Ready", relief=tk.SUNKEN, padding=(5, 2))
         self.status.pack(side=tk.RIGHT, fill=tk.X)
-        
+    def _handle_text_scroll(self, event):
+        """Handle Text widget scrolling"""
+        event.widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        return "break"
     def setup_about_tab(self):
         # Create content with padding
         container = ttk.Frame(self.about_tab, padding=(30, 20))
@@ -459,6 +505,7 @@ class LeetCodeDashboard:
         
         desc_text = tk.Text(desc_frame, wrap=tk.WORD, height=12, width=60, 
                           font=('Arial', 11), bd=0, padx=5, pady=5)
+        desc_text.bind("<MouseWheel>", self._handle_text_scroll)
         desc_text.pack(fill=tk.BOTH, expand=True)
         desc_text.insert(tk.END, description)
         desc_text.config(state=tk.DISABLED)  # Make read-only
@@ -502,7 +549,10 @@ class LeetCodeDashboard:
 
         # Update display
         self.update_display()   
-
+    def _handle_treeview_scroll(self, event):
+        """Handle Treeview-specific scrolling"""
+        self.tree.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        return "break"  # Prevent event propagation
     def create_table(self, parent):
         # Create a frame for the table with scrollbars
         table_frame = ttk.Frame(parent)
@@ -513,7 +563,7 @@ class LeetCodeDashboard:
 
         # Create treeview
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="extended")
-
+        self.tree.bind("<MouseWheel>", self._handle_treeview_scroll)  # Add this line
         # Add scrollbars
         vsb = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(table_frame, orient="horizontal", command=self.tree.xview)
